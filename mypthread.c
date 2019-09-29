@@ -1005,6 +1005,7 @@ void my_timer(void)
 			time(&mytime);
 			p = localtime(&mytime);
 			p->tm_mon+=1;
+			if(!p->tm_wday) p->tm_wday += 7;
 			if(p->tm_sec ==0 || p->tm_sec ==1 || p->tm_sec ==2 || first_num)
 			{
 				first_num = 0;
