@@ -324,9 +324,9 @@ void pthread_usart_receive(void)
 								my_u_data =(uint8_t*)malloc(data_len);//解析数据接收缓冲区
 								memset(my_u_data,0,data_len);
 
-/*								for(i=0;i<data_len;i++)*/
-/*									my_u_data[i]=rc_buff[i];*/
-
+								for(i=0;i<data_len;i++)
+									my_u_data[i]=rc_buff[i];
+/*
 								printf("usart receive is:");
 								for(i=0;i<data_len;i++)
 								{
@@ -334,7 +334,7 @@ void pthread_usart_receive(void)
 									printf("%.2x  ",my_u_data[i]);
 								}
 								printf("\n");
-								
+*/
 								up_resend(my_u_data);//更新重发列表
 								
 								pth_creat_my(pthread_v_send,my_u_data);
@@ -622,7 +622,6 @@ void re_send(void)
 						int cmd_len = p->cmd[13]+p->cmd[14]+15;
 						gettimeofday(&time_val,NULL);
 						p->now_time = time_val.tv_sec*1000+time_val.tv_usec/1000;
-						//printf("time out %d\n",p->now_times);
 						usart_send(fd, p->cmd,cmd_len);
 						usleep(200000);
 					}

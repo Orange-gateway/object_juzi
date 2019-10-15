@@ -4592,6 +4592,7 @@ void get_signal(void)
 				data_arr_jx = cJSON_GetArrayItem(my_dev_list_list,i);
 				tem_mac = cJSON_GetObjectItem(data_arr_jx,"mac");
 				tem_type = cJSON_GetObjectItem(data_arr_jx,"dev_type");
+				tem_id = cJSON_GetObjectItem(data_arr_jx,"dev_id");
 				if(strcmp(tem_type->valuestring,"010101")==0)
 					flag_get=1;
 				else if(strcmp(tem_type->valuestring,"010102")==0)
@@ -4892,7 +4893,7 @@ void voice_com_con_u(int i,uint8_t *u_data,char *u_data_str)
 																resend_zt(17,final_cmd,tem_id->valuestring,tem_type->valuestring);	
 																usart_send(fd,final_cmd,17);
 															}
-															else if(!strcmp(tem_type->valuestring,"080401") && u_data[19] == 0x17)//中央空调
+															else if(!strcmp(tem_type->valuestring,"080401"))//中央空调
 															{
 																uint8_t final_cmd[25];
 																memset(final_cmd,0,25);
@@ -5970,7 +5971,7 @@ void dev_com_con_u(int i,int u_data_len,uint8_t *u_data,char *u_data_str)
 										free(device_state_list_char);
 										device_state_list_char = NULL;
 										break;
-									}	
+									}
 								}
 							}
 						}
