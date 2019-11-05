@@ -531,6 +531,7 @@ void re_send(void)
 		{
 			while(p!=NULL)
 			{
+				pthread_mutex_lock(&mutex_resend);
 				time_diff = resend_time - p->now_time;//获取大循环和小循环的时间差
 				if( time_diff > 2000 && p->now_times > 0)
 				{
@@ -616,6 +617,7 @@ void re_send(void)
 							cJSON_Delete(device_state_list_data);
 							device_state_list_data = NULL;
 						}
+						pthread_mutex_unlock(&mutex_resend);
 					}
 					else
 					{
@@ -623,9 +625,12 @@ void re_send(void)
 						gettimeofday(&time_val,NULL);
 						p->now_time = time_val.tv_sec*1000+time_val.tv_usec/1000;
 						usart_send(fd, p->cmd,cmd_len);
+						pthread_mutex_unlock(&mutex_resend);
 						usleep(200000);
 					}
 				}
+				else
+					pthread_mutex_unlock(&mutex_resend);
 				p = p->next;
 			}
 		}
@@ -638,6 +643,7 @@ void resend_zt(int len,uint8_t *cmd,char *dev_id,char *dev_type)
 	RSD *p = NULL;
 	struct timeval time_val;
 	p = resend_head;
+	pthread_mutex_lock(&mutex_resend);
 	if(p==NULL)
 	{
 		resend_d = (RSD*)malloc(sizeof(RSD));
@@ -650,7 +656,6 @@ void resend_zt(int len,uint8_t *cmd,char *dev_id,char *dev_type)
 		memcpy(resend_d->dev_type,dev_type,strlen(dev_type)+1);
 		resend_head = resend_z = resend_d;
 		resend_d->next = NULL;
-		return ;
 	}
 	else
 	{
@@ -659,17 +664,16 @@ void resend_zt(int len,uint8_t *cmd,char *dev_id,char *dev_type)
 		
 			if(!mac_and_port_judge(p,cmd))
 			{
+				p->now_times = 1;//记录当前的发送次数
 				gettimeofday(&time_val,NULL);
 				p->now_time = time_val.tv_sec*1000+time_val.tv_usec/1000;//记录时间
-				if(p->now_times ==0)
-					p->now_times = 1;//记录当前的发送次数
 				memset(p->cmd,0,64);
 				memcpy(p->cmd,cmd,len);
 				memset(p->dev_id,0,20);
 				memcpy(p->dev_id,dev_id,strlen(dev_id)+1);
 				memset(p->dev_type,0,10);
 				memcpy(p->dev_type,dev_type,strlen(dev_type)+1);
-				return;
+				break;
 			}
 			else if(p->next == NULL)
 			{
@@ -683,12 +687,12 @@ void resend_zt(int len,uint8_t *cmd,char *dev_id,char *dev_type)
 				memcpy(resend_d->dev_type,dev_type,strlen(dev_type)+1);
 				p->next = resend_d;
 				resend_d->next = NULL;
-				return ;
+				break;
 			}
 			p = p->next;
-	
 		}
 	}
+	pthread_mutex_unlock(&mutex_resend);
 }
 
 /************************************人体检测*************************************************/
@@ -696,12 +700,7 @@ void human_check(void)
 {
 	HB *p = NULL;
 	time_t human_time;
-	int	data_l,i,num,m,flag_have;
-	cJSON *data_arr_jx = NULL;
-	cJSON *tem_mac = NULL;
-	cJSON *tem_id = NULL;
-	cJSON *tem_port = NULL;
-	cJSON *tem_type = NULL;
+	int num,m,flag_have;
 	cJSON *arr_for = NULL;
 	while(1)
 	{
@@ -709,229 +708,211 @@ void human_check(void)
 		human_time = time(NULL);
 		while(p!=NULL)
 		{
+			pthread_mutex_lock(&mutex_human);
 			if(human_time - p->now_time >= 45 && p->flag == 1)
 			{
-				p->flag = 0;
-				pthread_mutex_lock(&mutex_sl);
-				cJSON *dev_list_data = cJSON_Parse(device_list);//遍历设备列表
-				pthread_mutex_unlock(&mutex_sl);
-				if(dev_list_data != NULL)
+				p->flag = 0;;
+				my_human_file();
+				if(strcmp(p->type,"060102")==0)//
 				{
-					if(dev_list_data->child != NULL)
+					run_scene_u_triger(p->id,"00");
+					cJSON *root_u = cJSON_CreateObject();//创建项目
+					cJSON *data_object = cJSON_CreateObject();
+					cJSON_AddNumberToObject(root_u,"retcode",0);
+					cJSON_AddStringToObject(root_u,"message","success");
+					cJSON_AddStringToObject(root_u,"api","devStateRes");
+					cJSON_AddItemToObject(root_u,"data",data_object);
+					cJSON_AddStringToObject(data_object,"dev_id",p->id);
+					cJSON_AddStringToObject(data_object,"dev_type","060102");
+					cJSON_AddStringToObject(data_object,"control_type","2");
+					
+					pthread_mutex_lock(&mutex_zl);
+					cJSON *device_state_list_data = cJSON_Parse(device_state_list);//遍历设备状态列表
+					if(device_state_list_data != NULL)
 					{
-						cJSON *my_dev_list_data = cJSON_GetObjectItem(dev_list_data,"data");
-						cJSON *my_dev_list_list = cJSON_GetObjectItem(my_dev_list_data,"dev_list");
-						data_l =  cJSON_GetArraySize(my_dev_list_list);
-						for(i=0;i<data_l;i++)
+						if(device_state_list_data->child != NULL)
 						{
-							data_arr_jx = cJSON_GetArrayItem(my_dev_list_list,i);
-							tem_mac = cJSON_GetObjectItem(data_arr_jx,"mac");
-							tem_port = cJSON_GetObjectItem(data_arr_jx,"dev_port");
-							if(strcmp(tem_mac->valuestring,p->mac)==0 && strcmp(tem_port->valuestring,p->port)==0)
+							cJSON *my_device_state_list_data = cJSON_GetObjectItem(device_state_list_data,"data");
+							cJSON *while_device_state_list_data = my_device_state_list_data->child;
+							if(while_device_state_list_data==NULL)
 							{
-								tem_id = cJSON_GetObjectItem(data_arr_jx,"dev_id");
-								tem_type = cJSON_GetObjectItem(data_arr_jx,"dev_type");
-								if(strcmp(tem_type->valuestring,"060102")==0)//
+								cJSON *my_date = cJSON_CreateObject();//创建项目
+								cJSON_AddItemToObject(my_device_state_list_data,p->id,my_date);
+								cJSON_AddStringToObject(my_date,"dev_state",00);
+								char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
+								memset(device_state_list,0,BUFFSIZE);
+								memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
+								int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
+								write(state_fd,device_state_list_char,strlen(device_state_list_char));
+								close(state_fd);
+								free(device_state_list_char);
+								device_state_list_char=NULL;
+								
+								cJSON *cmd_dev = cJSON_Duplicate(my_date,1);
+								cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
+								char *send_char = cJSON_PrintUnformatted(root_u);
+								int my_len = strlen(send_char);
+								char *my_send_char = (char *)malloc(my_len+2);
+								memset(my_send_char,0,my_len+2);
+								memcpy(my_send_char,send_char,my_len);
+								strcat(my_send_char,"\n\0");
+								if(NET_FLAG)
+								send(cd,my_send_char,my_len+1,0);
+								free(send_char);
+								send_char = NULL;
+								free(my_send_char);
+								my_send_char=NULL;
+								cJSON_Delete(root_u);
+								root_u = NULL;
+							}
+							else
+							{
+								while(while_device_state_list_data != NULL)
 								{
-									run_scene_u_triger(tem_id->valuestring,"00");
-									cJSON *root_u = cJSON_CreateObject();//创建项目
-									cJSON *data_object = cJSON_CreateObject();
-									cJSON_AddNumberToObject(root_u,"retcode",0);
-									cJSON_AddStringToObject(root_u,"message","success");
-									cJSON_AddStringToObject(root_u,"api","devStateRes");
-									cJSON_AddItemToObject(root_u,"data",data_object);
-									cJSON_AddStringToObject(data_object,"dev_id",tem_id->valuestring);
-									cJSON_AddStringToObject(data_object,"dev_type","060102");
-									cJSON_AddStringToObject(data_object,"control_type","2");
-									
-									pthread_mutex_lock(&mutex_zl);
-									cJSON *device_state_list_data = cJSON_Parse(device_state_list);//遍历设备状态列表
-									if(device_state_list_data != NULL)
+									if(strcmp(while_device_state_list_data->string,p->id)==0)
 									{
-										if(device_state_list_data->child != NULL)
+										cJSON *dev_state_cjson = cJSON_GetObjectItem(my_device_state_list_data,p->id);
+										num = cJSON_GetArraySize(dev_state_cjson);
+										flag_have=0;
+										for(m=0;m<num;m++)
 										{
-											cJSON *my_device_state_list_data = cJSON_GetObjectItem(device_state_list_data,"data");
-											cJSON *while_device_state_list_data = my_device_state_list_data->child;
-											if(while_device_state_list_data==NULL)
+											arr_for = cJSON_GetArrayItem(dev_state_cjson,m);
+											if(!strcmp(arr_for->string,"dev_state"))
 											{
-												cJSON *my_date = cJSON_CreateObject();//创建项目
-												cJSON_AddItemToObject(my_device_state_list_data,tem_id->valuestring,my_date);
-												cJSON_AddStringToObject(my_date,"dev_state",00);
-												char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
-												memset(device_state_list,0,BUFFSIZE);
-												memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
-												int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
-												write(state_fd,device_state_list_char,strlen(device_state_list_char));
-												close(state_fd);
-												free(device_state_list_char);
-												device_state_list_char=NULL;
-												
-												cJSON *cmd_dev = cJSON_Duplicate(my_date,1);
-												cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
-												char *send_char = cJSON_PrintUnformatted(root_u);
-												int my_len = strlen(send_char);
-												char *my_send_char = (char *)malloc(my_len+2);
-												memset(my_send_char,0,my_len+2);
-												memcpy(my_send_char,send_char,my_len);
-												strcat(my_send_char,"\n\0");
-												if(NET_FLAG)
-												send(cd,my_send_char,my_len+1,0);
-												free(send_char);
-												send_char = NULL;
-												free(my_send_char);
-												my_send_char=NULL;
-												cJSON_Delete(root_u);
-												root_u = NULL;
-											}
-											else
-											{
-												while(while_device_state_list_data != NULL)
-												{
-													if(strcmp(while_device_state_list_data->string,tem_id->valuestring)==0)
-													{
-														cJSON *dev_state_cjson = cJSON_GetObjectItem(my_device_state_list_data,tem_id->valuestring);
-														num = cJSON_GetArraySize(dev_state_cjson);
-														flag_have=0;
-														for(m=0;m<num;m++)
-														{
-															arr_for = cJSON_GetArrayItem(dev_state_cjson,m);
-															if(!strcmp(arr_for->string,"dev_state"))
-															{
-																flag_have = 1;
-																break;
-															}
-														}
-														if(flag_have == 1)
-														{
-															cJSON *my_dev_state = cJSON_GetObjectItem(dev_state_cjson,"dev_state");
-															memset(my_dev_state->valuestring,0,strlen(my_dev_state->valuestring));
-															memcpy(my_dev_state->valuestring,"00",2);
-															char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
-															memset(device_state_list,0,BUFFSIZE);
-															memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
-															int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
-															write(state_fd,device_state_list_char,strlen(device_state_list_char));
-															close(state_fd);
-															free(device_state_list_char);
-															device_state_list_char = NULL;
-															
-															cJSON *cmd_dev = cJSON_Duplicate(dev_state_cjson,1);
-															cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
-															char *send_char = cJSON_PrintUnformatted(root_u);
-															int my_len = strlen(send_char);
-															char *my_send_char = (char *)malloc(my_len+2);
-															memset(my_send_char,0,my_len+2);
-															memcpy(my_send_char,send_char,my_len);
-															strcat(my_send_char,"\n\0");
-															if(NET_FLAG)
-															send(cd,my_send_char,my_len+1,0);
-															free(send_char);
-															send_char = NULL;
-															free(my_send_char);
-															my_send_char=NULL;
-															cJSON_Delete(root_u);
-															root_u = NULL;
-														}
-														else
-														{
-															cJSON_AddStringToObject(dev_state_cjson,"dev_state","00");
-															char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
-															memset(device_state_list,0,BUFFSIZE);
-															memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
-															int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
-															write(state_fd,device_state_list_char,strlen(device_state_list_char));
-															close(state_fd);
-															free(device_state_list_char);
-															device_state_list_char = NULL;
-															
-															cJSON *cmd_dev = cJSON_Duplicate(dev_state_cjson,1);
-															cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
-															char *send_char = cJSON_PrintUnformatted(root_u);
-															int my_len = strlen(send_char);
-															char *my_send_char = (char *)malloc(my_len+2);
-															memset(my_send_char,0,my_len+2);
-															memcpy(my_send_char,send_char,my_len);
-															strcat(my_send_char,"\n\0");
-															if(NET_FLAG)
-															send(cd,my_send_char,my_len+1,0);
-															free(send_char);
-															send_char = NULL;
-															free(my_send_char);
-															my_send_char=NULL;
-															cJSON_Delete(root_u);
-															root_u = NULL;
-														}
-														break;
-													}
-													while_device_state_list_data = while_device_state_list_data->next;
-													if(while_device_state_list_data == NULL)
-													{
-														cJSON *my_date = cJSON_CreateObject();//创建项目
-														cJSON_AddItemToObject(my_device_state_list_data,tem_id->valuestring,my_date);
-														cJSON_AddStringToObject(my_date,"dev_state","00");
-														char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
-														memset(device_state_list,0,BUFFSIZE);
-														memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
-														int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
-														write(state_fd,device_state_list_char,strlen(device_state_list_char));
-														close(state_fd);
-														free(device_state_list_char);
-														device_state_list_char=NULL;
-														
-														cJSON *cmd_dev = cJSON_Duplicate(my_date,1);
-														cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
-														char *send_char = cJSON_PrintUnformatted(root_u);
-														int my_len = strlen(send_char);
-														char *my_send_char = (char *)malloc(my_len+2);
-														memset(my_send_char,0,my_len+2);
-														memcpy(my_send_char,send_char,my_len);
-														strcat(my_send_char,"\n\0");
-														if(NET_FLAG)
-														send(cd,my_send_char,my_len+1,0);
-														free(send_char);
-														send_char = NULL;
-														free(my_send_char);
-														my_send_char=NULL;
-														cJSON_Delete(root_u);
-														root_u = NULL;
-													}
-												}
+												flag_have = 1;
+												break;
 											}
 										}
+										if(flag_have == 1)
+										{
+											cJSON *my_dev_state = cJSON_GetObjectItem(dev_state_cjson,"dev_state");
+											memset(my_dev_state->valuestring,0,strlen(my_dev_state->valuestring));
+											memcpy(my_dev_state->valuestring,"00",2);
+											char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
+											memset(device_state_list,0,BUFFSIZE);
+											memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
+											int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
+											write(state_fd,device_state_list_char,strlen(device_state_list_char));
+											close(state_fd);
+											free(device_state_list_char);
+											device_state_list_char = NULL;
+											
+											cJSON *cmd_dev = cJSON_Duplicate(dev_state_cjson,1);
+											cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
+											char *send_char = cJSON_PrintUnformatted(root_u);
+											int my_len = strlen(send_char);
+											char *my_send_char = (char *)malloc(my_len+2);
+											memset(my_send_char,0,my_len+2);
+											memcpy(my_send_char,send_char,my_len);
+											strcat(my_send_char,"\n\0");
+											if(NET_FLAG)
+											send(cd,my_send_char,my_len+1,0);
+											free(send_char);
+											send_char = NULL;
+											free(my_send_char);
+											my_send_char=NULL;
+											cJSON_Delete(root_u);
+											root_u = NULL;
+										}
+										else
+										{
+											cJSON_AddStringToObject(dev_state_cjson,"dev_state","00");
+											char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
+											memset(device_state_list,0,BUFFSIZE);
+											memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
+											int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
+											write(state_fd,device_state_list_char,strlen(device_state_list_char));
+											close(state_fd);
+											free(device_state_list_char);
+											device_state_list_char = NULL;
+											
+											cJSON *cmd_dev = cJSON_Duplicate(dev_state_cjson,1);
+											cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
+											char *send_char = cJSON_PrintUnformatted(root_u);
+											int my_len = strlen(send_char);
+											char *my_send_char = (char *)malloc(my_len+2);
+											memset(my_send_char,0,my_len+2);
+											memcpy(my_send_char,send_char,my_len);
+											strcat(my_send_char,"\n\0");
+											if(NET_FLAG)
+											send(cd,my_send_char,my_len+1,0);
+											free(send_char);
+											send_char = NULL;
+											free(my_send_char);
+											my_send_char=NULL;
+											cJSON_Delete(root_u);
+											root_u = NULL;
+										}
+										break;
 									}
-									pthread_mutex_unlock(&mutex_zl);
-									cJSON_Delete(device_state_list_data);
-									device_state_list_data = NULL;
+									while_device_state_list_data = while_device_state_list_data->next;
+									if(while_device_state_list_data == NULL)
+									{
+										cJSON *my_date = cJSON_CreateObject();//创建项目
+										cJSON_AddItemToObject(my_device_state_list_data,p->id,my_date);
+										cJSON_AddStringToObject(my_date,"dev_state","00");
+										char *device_state_list_char = cJSON_PrintUnformatted(device_state_list_data);
+										memset(device_state_list,0,BUFFSIZE);
+										memcpy(device_state_list,device_state_list_char,strlen(device_state_list_char));
+										int state_fd = open("/root/device_state_list.txt",O_RDWR|O_CREAT|O_TRUNC,0777);
+										write(state_fd,device_state_list_char,strlen(device_state_list_char));
+										close(state_fd);
+										free(device_state_list_char);
+										device_state_list_char=NULL;
+										
+										cJSON *cmd_dev = cJSON_Duplicate(my_date,1);
+										cJSON_AddItemToObject(data_object,"dev_state",cmd_dev);
+										char *send_char = cJSON_PrintUnformatted(root_u);
+										int my_len = strlen(send_char);
+										char *my_send_char = (char *)malloc(my_len+2);
+										memset(my_send_char,0,my_len+2);
+										memcpy(my_send_char,send_char,my_len);
+										strcat(my_send_char,"\n\0");
+										if(NET_FLAG)
+										send(cd,my_send_char,my_len+1,0);
+										free(send_char);
+										send_char = NULL;
+										free(my_send_char);
+										my_send_char=NULL;
+										cJSON_Delete(root_u);
+										root_u = NULL;
+									}
 								}
 							}
 						}
 					}
+					pthread_mutex_unlock(&mutex_zl);
+					cJSON_Delete(device_state_list_data);
+					device_state_list_data = NULL;
 				}
-				cJSON_Delete(dev_list_data);
-				dev_list_data = NULL;
 			}
+			pthread_mutex_unlock(&mutex_human);
 			p = p->next;
 		}
-
 		sleep(5);//每次的大循环延时2s
 	}
 }
 /*人体登记到链表*/
-void human_zt(char *mac,char *port)
+void human_zt(char *mac,char *port,char *id,char *type,time_t num)
 {
 	HB *p = NULL;
 	p = human_head;
+	pthread_mutex_lock(&mutex_human);
 	if(p==NULL)
 	{
 		human_d = (HB*)malloc(sizeof(HB));
 		memset(human_d,0,sizeof(HB));
-		human_d->now_time = time(NULL);//记录时间
+		if(num == 0)
+			human_d->now_time = time(NULL);//记录时间
+		else
+			human_d->now_time = num;
 		human_d->flag = 1;
 		memcpy(human_d->mac,mac,17);
 		memcpy(human_d->port,port,3);
+		memcpy(human_d->id,id,strlen(id)+1);
+		memcpy(human_d->type,type,strlen(type)+1);
 		human_head = human_z = human_d;
 		human_d->next = NULL;
-		return ;
 	}
 	else
 	{
@@ -939,33 +920,45 @@ void human_zt(char *mac,char *port)
 		{
 			if(!mac_and_port_judge_human(p,mac,port))
 			{
-				p->now_time = time(NULL);//记录时间
+				if(num == 0)
+					p->now_time = time(NULL);//记录时间
+				else
+					p->now_time = num;
 				p->flag = 1;
-				return;
+				memset(p->id,0,20);
+				memset(p->type,0,10);
+				memcpy(p->id,id,strlen(id)+1);
+				memcpy(p->type,type,strlen(type)+1);
+				break;
 			}
 			else if(p->next == NULL)
 			{
 				human_d = (HB*)malloc(sizeof(HB));
 				memset(human_d,0,sizeof(HB));
-				human_d->now_time = time(NULL);//记录时间
+				if(num == 0)
+					human_d->now_time = time(NULL);//记录时间
+				else
+					human_d->now_time = num;
 				human_d->flag = 1;
 				memcpy(human_d->mac,mac,17);
 				memcpy(human_d->port,port,3);
+				memcpy(human_d->id,id,strlen(id)+1);
+				memcpy(human_d->type,type,strlen(type)+1);
 				p->next = human_d;
 				human_d->next = NULL;
-
-				return ;
+				break ;
 			}
 			p = p->next;
-	
 		}
 	}
+	pthread_mutex_unlock(&mutex_human);
 }
 /*更新重发列表*/
 void up_resend(uint8_t *data)
 {
 	RSD *p1 = NULL;
 	p1 = resend_head;
+	pthread_mutex_lock(&mutex_resend);
 	while(p1)
 	{
 		if(!mac_and_port_judge(p1,data))
@@ -975,6 +968,7 @@ void up_resend(uint8_t *data)
 		}
 		p1 = p1->next;
 	}
+	pthread_mutex_unlock(&mutex_resend);
 }
 
 /*********************************定时器********************************************/
