@@ -194,35 +194,6 @@ void cmd_mix_lock(char *mac,char *port,char *cmd,uint8_t *final_cmd)//发送至�
 	str_to_hex(final_cmd,send_cmd,25);
 }
 /***********************************************************************************************************/
-void dev_set_time(cJSON *root,char *str)
-{
-	int my_len = strlen(str);
-	char *my_send_char = (char *)malloc(my_len+2);
-	memset(my_send_char,0,my_len+2);
-	memcpy(my_send_char,str,my_len);
-	strcat(my_send_char,"\n\0");
-	send(cd,my_send_char,my_len+1,0);
-	cJSON *delay_data = cJSON_GetObjectItem(root,"data");
-	cJSON *delay_dev_id = cJSON_GetObjectItem(delay_data,"dev_id");
-	cJSON *delay_dev_mac = cJSON_GetObjectItem(delay_data,"dev_mac");
-	cJSON *delay_dev_type = cJSON_GetObjectItem(delay_data,"dev_type");
-	cJSON *delay_dev_port = cJSON_GetObjectItem(delay_data,"dev_port");
-	cJSON *delay_dev_cmd = cJSON_GetObjectItem(delay_data,"dev_cmd");
-	cJSON *delay_dev_time = cJSON_GetObjectItem(delay_data,"dev_time");
-	int time_hour = atoi(delay_dev_time->valuestring);
-	int time_min = atoi(delay_dev_time->valuestring+3);
-	int time_sec = atoi(delay_dev_time->valuestring+6);
-	cJSON *delay_type = cJSON_GetObjectItem(delay_data,"type");
-	if(!strcmp(delay_type->valuestring,"set"))
-		delay_zt(delay_dev_cmd->valuestring,delay_dev_mac->valuestring,delay_dev_port->valuestring,delay_dev_id->valuestring,delay_dev_type->valuestring,time_hour,time_min,time_sec,0);
-	else if(!strcmp(delay_type->valuestring,"del"))
-		delay_zt(delay_dev_cmd->valuestring,delay_dev_mac->valuestring,delay_dev_port->valuestring,delay_dev_id->valuestring,delay_dev_type->valuestring,time_hour,time_min,time_sec,1);
-	pthread_mutex_lock(&mutex_delay);
-	my_delay_file();
-	pthread_mutex_unlock(&mutex_delay);
-	free(my_send_char);
-	my_send_char = NULL;
-}
 void dev_com_con(cJSON *root)//无内存泄露问题
 {
 	int kg;
