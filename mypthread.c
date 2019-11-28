@@ -1293,6 +1293,8 @@ void get_status(void)
 				status_flag=1;
 			else if(strcmp(tem_type->valuestring,"010104")==0)
 				status_flag=1;
+			else if(strcmp(tem_type->valuestring,"010105")==0)
+				status_flag=1;
 			else if(strcmp(tem_type->valuestring,"010201")==0)
 				status_flag=1;
 			else if(strcmp(tem_type->valuestring,"010301")==0)

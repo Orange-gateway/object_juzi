@@ -320,6 +320,16 @@ void dev_com_con(cJSON *root)//无内存泄露问题
 						else
 							flag_kg=1;
 					}
+					else if(strcmp(dev_type_this->valuestring,"010105")==0)
+					{
+						cmd_mix(data_mac->valuestring,data_port->valuestring,data_dev_cmd->valuestring,final_cmd);
+						resend_zt(15+len_of_cmd,final_cmd,dev_id_this->valuestring,dev_type_this->valuestring);
+						usart_send(fd, final_cmd,15+len_of_cmd);
+						if(strcmp(data_dev_cmd->valuestring,"00")==0)
+							flag_kg=0;
+						else
+							flag_kg=1;
+					}
 					else if(strcmp(dev_type_this->valuestring,"010201")==0)
 					{
 						cmd_mix(data_mac->valuestring,data_port->valuestring,data_dev_cmd->valuestring,final_cmd);
@@ -470,6 +480,8 @@ void dev_com_con(cJSON *root)//无内存泄露问题
 																else if(strcmp(data_type_for->valuestring,"010103")==0)
 																	kg=1;
 																else if(strcmp(data_type_for->valuestring,"010104")==0)
+																	kg=1;
+																else if(strcmp(data_type_for->valuestring,"010105")==0)
 																	kg=1;
 																else if(strcmp(data_type_for->valuestring,"010501")==0)
 																	kg=1;
@@ -674,6 +686,8 @@ void dev_room_con(cJSON *root)//无内存泄露问题
 						else if(strcmp(data_type->valuestring,"010103")==0)
 							kg=1;
 						else if(strcmp(data_type->valuestring,"010104")==0)
+							kg=1;
+						else if(strcmp(data_type->valuestring,"010105")==0)
 							kg=1;
 						else if(strcmp(data_type->valuestring,"040101")==0)
 							kg=1;
@@ -918,6 +932,8 @@ void voice_open(cJSON *data_arr_jx,char *Voice_CMD)
 	else if(!strcmp(tem_type->valuestring,"010103"))//一字节命令为1
 	class=1;
 	else if(!strcmp(tem_type->valuestring,"010104"))//一字节命令为1
+	class=1;
+	else if(!strcmp(tem_type->valuestring,"010105"))//一字节命令为1
 	class=1;
 	else if(!strcmp(tem_type->valuestring,"010201"))//一字节命令为1
 	class=1;
@@ -1502,6 +1518,8 @@ void voice_close(cJSON *data_arr_jx)
 	else if(!strcmp(tem_type->valuestring,"010103"))//一字节命令为1
 	class=1;
 	else if(!strcmp(tem_type->valuestring,"010104"))//一字节命令为1
+	class=1;
+	else if(!strcmp(tem_type->valuestring,"010105"))//一字节命令为1
 	class=1;
 	else if(!strcmp(tem_type->valuestring,"010201"))//一字节命令为1
 	class=1;
@@ -4939,6 +4957,8 @@ void get_signal(void)
 					flag_get=1;
 				else if(strcmp(tem_type->valuestring,"010104")==0)
 					flag_get=1;
+				else if(strcmp(tem_type->valuestring,"010105")==0)
+					flag_get=1;
 				else if(strcmp(tem_type->valuestring,"010201")==0)
 					flag_get=1;
 				else if(strcmp(tem_type->valuestring,"010301")==0)
@@ -5103,7 +5123,7 @@ void voice_com_con_u(int i,uint8_t *u_data,char *u_data_str)
  														if(!strcmp(tem_id->valuestring,my_scene_id->valuestring))
 														{
 															tem_type = cJSON_GetObjectItem(data_arr_jx,"dev_type");
-															if(!strcmp(tem_type->valuestring,"010101")||!strcmp(tem_type->valuestring,"010103")||!strcmp(tem_type->valuestring,"010104")||!strcmp(tem_type->valuestring,"010501"))//开关类
+															if(!strcmp(tem_type->valuestring,"010101")||!strcmp(tem_type->valuestring,"010103")||!strcmp(tem_type->valuestring,"010104")||!strcmp(tem_type->valuestring,"010105")||!strcmp(tem_type->valuestring,"010501"))//开关类
 															{
 																uint8_t final_cmd[16];
 																memset(final_cmd,0,16);
@@ -5933,6 +5953,13 @@ void dev_com_con_u(int i,int u_data_len,uint8_t *u_data,char *u_data_str)
 						else
 							flag_kg=1;
 					}
+					else if(strcmp(tem_type->valuestring,"010105")==0)
+					{
+						if(strcmp(data_str,"00")==0)
+							flag_kg=0;
+						else
+							flag_kg=1;
+					}
 					else if(strcmp(tem_type->valuestring,"010201")==0)
 					{
 						if(strcmp(data_str,"00")==0)
@@ -6088,6 +6115,8 @@ void dev_com_con_u(int i,int u_data_len,uint8_t *u_data,char *u_data_str)
 																	else if(strcmp(tem_type_for->valuestring,"010103")==0)
 																		kg=1;
 																	else if(strcmp(tem_type_for->valuestring,"010104")==0)
+																		kg=1;
+																	else if(strcmp(tem_type_for->valuestring,"010105")==0)
 																		kg=1;
 																	else if(strcmp(tem_type_for->valuestring,"010501")==0)
 																		kg=1;
@@ -8326,6 +8355,8 @@ void up_dev_des(void)//随着列表更新而更新状态列表
 								a=3;
 							else if(strcmp(data_type->valuestring,"010104")==0)//语音开关
 								a=3;
+							else if(strcmp(data_type->valuestring,"010105")==0)//语音开关
+								a=3;
 							else if(strcmp(data_type->valuestring,"010201")==0)//调光灯
 								a=3;
 							else if(strcmp(data_type->valuestring,"010301")==0)//RGB调色灯
@@ -8521,6 +8552,8 @@ void up_dev_des(void)//随着列表更新而更新状态列表
 									else if(strcmp(data_type->valuestring,"010103")==0)//带背光开关
 										a=3;
 									else if(strcmp(data_type->valuestring,"010104")==0)//语音开关
+										a=3;
+									else if(strcmp(data_type->valuestring,"010105")==0)//语音开关
 										a=3;
 									else if(strcmp(data_type->valuestring,"010201")==0)//调光灯
 										a=3;
@@ -9959,6 +9992,8 @@ int scene_time_judge(char *my_time,cJSON *mxid,char *strid)
 							else if(!strcmp(tem_type->valuestring,"010103"))//带背光开关
 								class=4;
 							else if(!strcmp(tem_type->valuestring,"010104"))//语音开关
+								class=4;
+							else if(!strcmp(tem_type->valuestring,"010105"))//语音开关
 								class=4;
 							else if(!strcmp(tem_type->valuestring,"010201"))//调光灯
 								class=4;
