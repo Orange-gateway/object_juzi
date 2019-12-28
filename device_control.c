@@ -4434,7 +4434,7 @@ void get_hw_code_ser(cJSON *root)
 				final_cmd=NULL;
 				pthread_mutex_lock(&mutex_code);
 				cJSON *code_id_root = cJSON_Parse(code_id);
-				if(code_id_root != NULL)
+				if(code_id_root != NULL && strcmp(get_hw_id->valuestring,"0"))
 				{
 					if(code_id_root->child != NULL)
 					{
@@ -4517,7 +4517,7 @@ void get_hw_code_ser(cJSON *root)
 				final_cmd=NULL;
 				pthread_mutex_lock(&mutex_code);
 				cJSON *code_id_root = cJSON_Parse(code_id);
-				if(code_id_root != NULL)
+				if(code_id_root != NULL && strcmp(get_hw_id->valuestring,"0"))
 				{
 					if(code_id_root->child != NULL)
 					{
